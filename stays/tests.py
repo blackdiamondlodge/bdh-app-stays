@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from bdh_sdk import Stay
-from stays import homepage
+from bdh_sdk import INFO, ON, WARN, Reading, Stay
+from stays import card, homepage
 
 LODGE = timezone(timedelta(hours=-7))
 
@@ -48,6 +48,84 @@ class CurrentStayTests(SimpleTestCase):
         get.return_value = _state("none")
         homepage.current_stay()
         get.assert_called_once_with("sensor.other_stay")
+
+    def test_owner_visit(self, get):
+        get.return_value = _state("Owner visit", guest="Owner visit", owner=True)
+        self.assertEqual(homepage.current_stay(), Stay("Owner visit", owner=True))
+
+
+def _states(**overrides):
+    base = {
+        "sensor.bdl_stay_current": ("none", {}),
+        "sensor.bdl_stay_next": ("none", {}),
+        "sensor.bdl_modes_status": ("done", {"kind": "vacation", "issues": []}),
+        "input_select.bdl_occupancy": ("away", {}),
+        "sensor.hot_tub_current_temperature": ("38.6", {"unit_of_measurement": "°C"}),
+        "sensor.kitchen_bdl_temperature": ("14", {"unit_of_measurement": "°C"}),
+        "sensor.foyer_bdl_temperature": ("59", {"unit_of_measurement": "°F"}),
+        "sensor.attic_bdl_temperature": ("unavailable", {}),
+        "sensor.outside_temperature": ("-5", {"unit_of_measurement": "°C"}),
+    }
+    base.update(overrides)
+    return [{"entity_id": e, "state": s, "attributes": a} for e, (s, a) in base.items()]
+
+
+@patch("stays.card.get_all_states")
+class LodgeCardTests(SimpleTestCase):
+    # The hub runs in UTC; times are shown in the stay's own offset.
+    def _soon(self, **delta):
+        return (datetime.now(LODGE) + timedelta(**delta)).isoformat()
+
+    def _tomorrow_4pm(self):
+        return datetime.combine(datetime.now(LODGE).date() + timedelta(days=1), time(16),
+                                tzinfo=LODGE).isoformat()
+
+    def test_vacation_mode_with_next_arrival_and_readings(self, get):
+        get.return_value = _states(**{"sensor.bdl_stay_next": (
+            "The Smiths", {"guest": "The Smiths", "arrival": "2027-01-04T16:00:00-07:00"})})
+        c = card.lodge_card()
+        self.assertEqual(c.title, "Vacation mode")
+        self.assertEqual(c.detail, "Next: The Smiths, Mon Jan 4, 4 PM")
+        # Rooms average 14 C and 59 F (15 C); unreadable rooms are skipped.
+        self.assertEqual(c.readings, (Reading("Inside", 14.5, "C"),
+                                      Reading("Hot tub", 38.6, "C")))
+        self.assertEqual((c.alerts, c.level, c.url_name), ((), INFO, "vacation_mode"))
+
+    def test_lodge_empty_without_stays(self, get):
+        get.return_value = _states(**{"input_select.bdl_occupancy": ("home", {})})
+        c = card.lodge_card()
+        self.assertEqual((c.title, c.detail), ("Lodge empty", "No upcoming stays"))
+
+    def test_preheating(self, get):
+        get.return_value = _states(**{
+            "input_select.bdl_occupancy": ("preheat", {}),
+            "sensor.bdl_stay_next": ("Owner visit", {
+                "guest": "Owner visit", "owner": True, "arrival": self._tomorrow_4pm()}),
+        })
+        c = card.lodge_card()
+        self.assertEqual((c.title, c.level), ("Preheating for your visit", ON))
+        self.assertEqual(c.detail, "Ready tomorrow, 4 PM")
+
+    def test_guest_and_owner_stays(self, get):
+        checkout = self._soon(minutes=1)
+        get.return_value = _states(**{"sensor.bdl_stay_current": (
+            "The Smiths", {"guest": "The Smiths", "checkout": checkout})})
+        c = card.lodge_card()
+        self.assertEqual(c.title, "Welcome, The Smiths")
+        self.assertTrue(c.detail.startswith("Checkout "), c.detail)
+
+        get.return_value = _states(**{"sensor.bdl_stay_current": (
+            "Owner visit", {"guest": "Owner visit", "owner": True, "checkout": checkout})})
+        c = card.lodge_card()
+        self.assertEqual(c.title, "Welcome back")
+        self.assertTrue(c.detail.startswith("Leaving "), c.detail)
+
+    def test_unresolved_mode_issues_are_alerts(self, get):
+        get.return_value = _states(**{"sensor.bdl_modes_status": (
+            "failed", {"issues": ["Living room fireplace off"]})})
+        c = card.lodge_card()
+        self.assertEqual(c.alerts, ("Living room fireplace off: didn't complete",))
+        self.assertEqual(c.level, WARN)
 
 
 class HubGuestModeTests(TestCase):

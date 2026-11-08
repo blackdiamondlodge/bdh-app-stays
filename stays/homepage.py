@@ -43,4 +43,5 @@ def current_stay():
         guest=str(attrs.get("guest") or value),
         arrival=_when(attrs.get("arrival")),
         checkout=_when(attrs.get("checkout")),
+        owner=bool(attrs.get("owner")),
     )
