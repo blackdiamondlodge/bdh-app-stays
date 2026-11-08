@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
-from django.utils import timezone as dj_timezone
 
 from bdh_sdk import INFO, ON, WARN, Reading, Stay
 from stays import card, homepage
@@ -71,15 +70,15 @@ def _states(**overrides):
     return [{"entity_id": e, "state": s, "attributes": a} for e, (s, a) in base.items()]
 
 
-@override_settings(TIME_ZONE="Etc/GMT+7")
 @patch("stays.card.get_all_states")
 class LodgeCardTests(SimpleTestCase):
+    # The hub runs in UTC; times are shown in the stay's own offset.
     def _soon(self, **delta):
-        return (dj_timezone.now() + timedelta(**delta)).isoformat()
+        return (datetime.now(LODGE) + timedelta(**delta)).isoformat()
 
     def _tomorrow_4pm(self):
-        return datetime.combine(dj_timezone.localdate() + timedelta(days=1), time(16),
-                                tzinfo=dj_timezone.get_current_timezone()).isoformat()
+        return datetime.combine(datetime.now(LODGE).date() + timedelta(days=1), time(16),
+                                tzinfo=LODGE).isoformat()
 
     def test_vacation_mode_with_next_arrival_and_readings(self, get):
         get.return_value = _states(**{"sensor.bdl_stay_next": (

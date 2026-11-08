@@ -4,9 +4,7 @@ Reads the Stays sensors, the bdl_modes executor's status and occupancy, and a
 few temperatures from Home Assistant in a single request.
 """
 import re
-from datetime import timedelta
-
-from django.utils import timezone
+from datetime import datetime, timedelta
 
 from bdh_sdk import INFO, ON, WARN, Card, Reading
 from bdh_sdk.ha import get_all_states
@@ -62,19 +60,19 @@ def _celsius(state):
 
 
 def _when_text(when):
+    # In the stay's own timezone: the hub's TIME_ZONE is UTC.
     if when is None:
         return ""
-    local = timezone.localtime(when)
-    today = timezone.localdate()
-    if local.date() == today:
+    today = datetime.now(when.tzinfo).date()
+    if when.date() == today:
         day = "today"
-    elif local.date() == today + timedelta(days=1):
+    elif when.date() == today + timedelta(days=1):
         day = "tomorrow"
     else:
-        day = f"{local:%a %b} {local.day}"
-    hour = f"{local:%I}".lstrip("0")
-    minutes = f":{local:%M}" if local.minute else ""
-    return f"{day}, {hour}{minutes} {local:%p}"
+        day = f"{when:%a %b} {when.day}"
+    hour = f"{when:%I}".lstrip("0")
+    minutes = f":{when:%M}" if when.minute else ""
+    return f"{day}, {hour}{minutes} {when:%p}"
 
 
 def _readings(states):
