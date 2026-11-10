@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bdh-app-stays"
-version = "1.1.0"
+version = "1.1.1"
 description = "Black Diamond Hub app: guest/owner modes during stays and the homepage lodge card"
 readme = "README.md"
 license = { text = "MIT" }

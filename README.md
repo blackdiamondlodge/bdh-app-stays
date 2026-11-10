@@ -41,7 +41,7 @@ fixed. Tapping the card opens the vacation mode page.
 | `BDH_STAYS_MODES_ENTITY` | `sensor.bdl_modes_status` | source of alerts |
 | `BDH_STAYS_OCCUPANCY_ENTITY` | `input_select.bdl_occupancy` | home / preheat / away |
 | `BDH_STAYS_HOT_TUB_ENTITY` | `sensor.hot_tub_current_temperature` | |
-| `BDH_STAYS_ROOM_TEMPERATURE_PATTERN` | `^sensor\..+_bdl_temperature$` | rooms averaged for Inside |
+| `BDH_STAYS_INSIDE_ENTITY` | `sensor.main_floor_temperature` | thermostat shown as Inside |
 | `BDH_STAYS_CARD_URL` | `vacation_mode` | URL name the card opens |
 
 Home Assistant URL and token come from the hub (`HOMEASSISTANT_URL`,

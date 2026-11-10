@@ -61,9 +61,8 @@ def _states(**overrides):
         "sensor.bdl_modes_status": ("done", {"kind": "vacation", "issues": []}),
         "input_select.bdl_occupancy": ("away", {}),
         "sensor.hot_tub_current_temperature": ("38.6", {"unit_of_measurement": "°C"}),
-        "sensor.kitchen_bdl_temperature": ("14", {"unit_of_measurement": "°C"}),
-        "sensor.foyer_bdl_temperature": ("59", {"unit_of_measurement": "°F"}),
-        "sensor.attic_bdl_temperature": ("unavailable", {}),
+        "sensor.main_floor_temperature": ("57.2", {"unit_of_measurement": "°F"}),
+        "sensor.kitchen_bdl_temperature": ("18", {"unit_of_measurement": "°C"}),
         "sensor.outside_temperature": ("-5", {"unit_of_measurement": "°C"}),
     }
     base.update(overrides)
@@ -86,10 +85,14 @@ class LodgeCardTests(SimpleTestCase):
         c = card.lodge_card()
         self.assertEqual(c.title, "Vacation mode")
         self.assertEqual(c.detail, "Next: The Smiths, Mon Jan 4, 4 PM")
-        # Rooms average 14 C and 59 F (15 C); unreadable rooms are skipped.
-        self.assertEqual(c.readings, (Reading("Inside", 14.5, "C"),
+        # The main floor thermostat (57.2 F), not the in-floor sensors.
+        self.assertEqual(c.readings, (Reading("Inside", 14.0, "C"),
                                       Reading("Hot tub", 38.6, "C")))
         self.assertEqual((c.alerts, c.level, c.url_name), ((), INFO, "vacation_mode"))
+
+    def test_unreadable_thermostat_leaves_out_inside(self, get):
+        get.return_value = _states(**{"sensor.main_floor_temperature": ("unavailable", {})})
+        self.assertEqual(card.lodge_card().readings, (Reading("Hot tub", 38.6, "C"),))
 
     def test_lodge_empty_without_stays(self, get):
         get.return_value = _states(**{"input_select.bdl_occupancy": ("home", {})})
