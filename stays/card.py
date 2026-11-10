@@ -3,7 +3,6 @@
 Reads the Stays sensors, the bdl_modes executor's status and occupancy, and a
 few temperatures from Home Assistant in a single request.
 """
-import re
 from datetime import datetime, timedelta
 
 from bdh_sdk import INFO, ON, WARN, Card, Reading
@@ -17,8 +16,8 @@ DEFAULTS = {
     "modes_entity": "sensor.bdl_modes_status",
     "occupancy_entity": "input_select.bdl_occupancy",
     "hot_tub_entity": "sensor.hot_tub_current_temperature",
-    # Rooms averaged into the "Inside" reading.
-    "room_temperature_pattern": r"^sensor\..+_bdl_temperature$",
+    # The "Inside" reading: the main floor thermostat, not the floor sensors.
+    "inside_entity": "sensor.main_floor_temperature",
     "card_url": "vacation_mode",
 }
 
@@ -76,12 +75,10 @@ def _when_text(when):
 
 
 def _readings(states):
-    pattern = re.compile(_setting("room_temperature_pattern"))
-    rooms = [c for e, s in states.items() if pattern.match(e)
-             if (c := _celsius(s)) is not None]
     readings = []
-    if rooms:
-        readings.append(Reading("Inside", round(sum(rooms) / len(rooms), 1), "C"))
+    inside = _celsius(states.get(_setting("inside_entity")) or {})
+    if inside is not None:
+        readings.append(Reading("Inside", round(inside, 1), "C"))
     hot_tub = _celsius(states.get(_setting("hot_tub_entity")) or {})
     if hot_tub is not None:
         readings.append(Reading("Hot tub", round(hot_tub, 1), "C"))
